@@ -10,7 +10,8 @@ interface AuthContextType {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string, fullName: string, username: string) => Promise<{ error: any }>;
-  signOut: () => Promise<void>;
+    signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<{ error: any }>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
 }
 
@@ -91,6 +92,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   };
 
+    const resetPassword = async (email: string) => {
+    const { error } = await authService.resetPassword(email);
+    return { error };
+  };
+
   const updateProfile = async (updates: Partial<UserProfile>) => {
     if (!user) return;
     
@@ -107,6 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signIn,
     signUp,
     signOut,
+    resetPassword,
     updateProfile,
   };
 

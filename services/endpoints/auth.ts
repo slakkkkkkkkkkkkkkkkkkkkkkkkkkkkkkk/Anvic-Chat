@@ -40,8 +40,15 @@ export const authService = {
     return { error };
   },
 
-  async getSession() {
+    async getSession() {
     const { data, error } = await supabase.auth.getSession();
+    return { data, error };
+  },
+
+  async resetPassword(email: string) {
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: 'anvic://reset-password',
+    });
     return { data, error };
   },
 
