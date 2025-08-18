@@ -14,6 +14,7 @@ import { Image } from 'expo-image';
 import { Colors } from '@/constants/Colors';
 import { chatService } from '@/services/endpoints/chat';
 import { UserProfile } from '@/services/types';
+import { useAuth } from '@/hooks/useAuth';
 
 interface UserSearchModalProps {
   visible: boolean;
@@ -22,6 +23,7 @@ interface UserSearchModalProps {
 }
 
 export default function UserSearchModal({ visible, onClose, onUserSelect }: UserSearchModalProps) {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -35,9 +37,11 @@ export default function UserSearchModal({ visible, onClose, onUserSelect }: User
   }, [searchQuery]);
 
   const searchUsers = async () => {
+    if (!user) return;
+    
     setLoading(true);
     try {
-      const { data, error } = await chatService.searchUsers(searchQuery.trim());
+      const { data, error } = await chatService.searchUsers(searchQuery.trim(), user.id);
       if (!error && data) {
         setUsers(data);
       }
@@ -48,8 +52,8 @@ export default function UserSearchModal({ visible, onClose, onUserSelect }: User
     }
   };
 
-  const handleUserSelect = (user: UserProfile) => {
-    onUserSelect(user);
+  const handleUserSelect = (selectedUser: UserProfile) => {
+    onUserSelect(selectedUser);
     onClose();
     setSearchQuery('');
     setUsers([]);

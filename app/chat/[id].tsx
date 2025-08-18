@@ -22,25 +22,27 @@ import { Message } from '@/services/types';
 export default function ChatScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { id: conversationId, userName, avatar } = useLocalSearchParams();
+  const { id: conversationId, userName, avatar, otherUserId } = useLocalSearchParams();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
-  const showAlert = (title: string, message: string) => {
+  const showAlert = (title: string, message: string, actions?: any[]) => {
     if (Platform.OS === 'web') {
       console.log(`${title}: ${message}`);
     } else {
-      Alert.alert(title, message);
+      Alert.alert(title, message, actions);
     }
   };
 
   useEffect(() => {
-    if (conversationId && user) {
+    if (conversationId && user && otherUserId) {
       loadMessages();
       markAsRead();
+      checkBlockStatus();
 
       // Subscribe to new messages
       const subscription = chatService.subscribeToMessages(
@@ -60,7 +62,7 @@ export default function ChatScreen() {
         subscription.unsubscribe();
       };
     }
-  }, [conversationId, user]);
+  }, [conversationId, user, otherUserId]);
 
   const loadMessages = async () => {
     if (!conversationId) return;
@@ -79,6 +81,17 @@ export default function ChatScreen() {
     }
   };
 
+  const checkBlockStatus = async () => {
+    if (!user || !otherUserId) return;
+
+    try {
+      const { data: blocked } = await chatService.isUserBlocked(user.id, otherUserId as string);
+      setIsBlocked(blocked);
+    } catch (error) {
+      console.error('Error checking block status:', error);
+    }
+  };
+
   const markAsRead = async () => {
     if (!conversationId || !user) return;
     
@@ -90,7 +103,7 @@ export default function ChatScreen() {
   };
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !conversationId || !user || sending) return;
+    if (!newMessage.trim() || !conversationId || !user || sending || isBlocked) return;
 
     const messageText = newMessage.trim();
     setNewMessage('');
@@ -113,6 +126,41 @@ export default function ChatScreen() {
       setNewMessage(messageText);
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleBlockUser = () => {
+    if (!user || !otherUserId) return;
+
+    const confirmBlock = async () => {
+      try {
+        const { error } = await chatService.blockUser(user.id, otherUserId as string);
+        if (!error) {
+          showAlert('Usuário Bloqueado', 'O usuário foi bloqueado com sucesso');
+          setIsBlocked(true);
+          router.back();
+        } else {
+          showAlert('Erro', 'Não foi possível bloquear o usuário');
+        }
+      } catch (error) {
+        console.error('Error blocking user:', error);
+        showAlert('Erro', 'Erro de conexão');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (confirm(`Bloquear ${userName}?`)) {
+        confirmBlock();
+      }
+    } else {
+      Alert.alert(
+        'Bloquear Usuário',
+        `Deseja bloquear ${userName}? Vocês não poderão mais se enviar mensagens.`,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Bloquear', style: 'destructive', onPress: confirmBlock },
+        ]
+      );
     }
   };
 
@@ -173,16 +221,23 @@ export default function ChatScreen() {
             />
             <View style={styles.headerText}>
               <Text style={styles.headerName}>{userName || 'Usuário'}</Text>
-              <Text style={styles.headerStatus}>online</Text>
+              <Text style={styles.headerStatus}>{isBlocked ? 'Bloqueado' : 'online'}</Text>
             </View>
           </View>
 
           <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.headerButton}>
-              <MaterialIcons name="videocam" size={24} color={Colors.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.headerButton}>
-              <MaterialIcons name="call" size={24} color={Colors.primary} />
+            {!isBlocked && (
+              <>
+                <TouchableOpacity style={styles.headerButton}>
+                  <MaterialIcons name="videocam" size={24} color={Colors.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.headerButton}>
+                  <MaterialIcons name="call" size={24} color={Colors.primary} />
+                </TouchableOpacity>
+              </>
+            )}
+            <TouchableOpacity style={styles.headerButton} onPress={handleBlockUser}>
+              <MaterialIcons name="block" size={24} color={Colors.error} />
             </TouchableOpacity>
           </View>
         </View>
@@ -201,42 +256,52 @@ export default function ChatScreen() {
             !loading ? (
               <View style={styles.emptyContainer}>
                 <MaterialIcons name="chat" size={48} color={Colors.textMuted} />
-                <Text style={styles.emptyText}>Inicie uma conversa</Text>
+                <Text style={styles.emptyText}>
+                  {isBlocked ? 'Usuário bloqueado' : 'Inicie uma conversa'}
+                </Text>
               </View>
             ) : null
           }
         />
 
         {/* Input */}
-        <View style={styles.inputContainer}>
-          <View style={styles.inputRow}>
-            <TouchableOpacity style={styles.attachButton}>
-              <MaterialIcons name="add" size={24} color={Colors.primary} />
-            </TouchableOpacity>
-            
-            <TextInput
-              style={styles.textInput}
-              placeholder="Digite uma mensagem..."
-              placeholderTextColor={Colors.textMuted}
-              value={newMessage}
-              onChangeText={setNewMessage}
-              multiline
-              maxLength={1000}
-            />
-            
-            <TouchableOpacity 
-              style={[styles.sendButton, (!newMessage.trim() || sending) && styles.sendButtonDisabled]}
-              onPress={sendMessage}
-              disabled={!newMessage.trim() || sending}
-            >
-              <MaterialIcons 
-                name="send" 
-                size={20} 
-                color={!newMessage.trim() || sending ? Colors.textMuted : Colors.text} 
+        {!isBlocked && (
+          <View style={styles.inputContainer}>
+            <View style={styles.inputRow}>
+              <TouchableOpacity style={styles.attachButton}>
+                <MaterialIcons name="add" size={24} color={Colors.primary} />
+              </TouchableOpacity>
+              
+              <TextInput
+                style={styles.textInput}
+                placeholder="Digite uma mensagem..."
+                placeholderTextColor={Colors.textMuted}
+                value={newMessage}
+                onChangeText={setNewMessage}
+                multiline
+                maxLength={1000}
               />
-            </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.sendButton, (!newMessage.trim() || sending) && styles.sendButtonDisabled]}
+                onPress={sendMessage}
+                disabled={!newMessage.trim() || sending}
+              >
+                <MaterialIcons 
+                  name="send" 
+                  size={20} 
+                  color={!newMessage.trim() || sending ? Colors.textMuted : Colors.text} 
+                />
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        )}
+
+        {isBlocked && (
+          <View style={styles.blockedContainer}>
+            <Text style={styles.blockedText}>Você bloqueou este usuário</Text>
+          </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -399,5 +464,17 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: 16,
     marginTop: 16,
+  },
+  blockedContainer: {
+    backgroundColor: Colors.surface,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  blockedText: {
+    color: Colors.error,
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

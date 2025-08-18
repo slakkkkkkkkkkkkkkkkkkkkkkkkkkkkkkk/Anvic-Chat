@@ -34,6 +34,14 @@ export interface Message {
   sender?: UserProfile;
 }
 
+export interface UserBlock {
+  id: string;
+  blocker_id: string;
+  blocked_id: string;
+  created_at: string;
+  blocked_user?: UserProfile;
+}
+
 export interface AuthUser {
   id: string;
   email: string;

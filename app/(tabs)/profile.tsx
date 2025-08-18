@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -6,10 +6,12 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/hooks/useAuth';
+import BlockedUsersModal from '@/components/ui/BlockedUsersModal';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, profile, signOut } = useAuth();
+  const [blockedUsersModalVisible, setBlockedUsersModalVisible] = useState(false);
 
   const showAlert = (title: string, message: string) => {
     if (Platform.OS === 'web') {
@@ -136,6 +138,13 @@ export default function ProfileScreen() {
             onPress={() => showAlert('Armazenamento', 'Abrindo configurações de armazenamento')}
           />
           
+                    <ProfileOption
+            icon="block"
+            title="Usuários Bloqueados"
+            subtitle="Gerenciar usuários bloqueados"
+            onPress={() => setBlockedUsersModalVisible(true)}
+          />
+          
           <ProfileOption
             icon="help"
             title="Ajuda"
@@ -158,6 +167,11 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <BlockedUsersModal
+        visible={blockedUsersModalVisible}
+        onClose={() => setBlockedUsersModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }

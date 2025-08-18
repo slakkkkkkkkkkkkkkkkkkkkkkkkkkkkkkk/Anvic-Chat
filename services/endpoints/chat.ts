@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import { UserProfile, Conversation, Message } from '../types';
+import { UserProfile, Conversation, Message, UserBlock } from '../types';
 
 export const chatService = {
   async getUserProfile(userId: string): Promise<{ data: UserProfile | null; error: any }> {
@@ -23,13 +23,24 @@ export const chatService = {
     return { data, error };
   },
 
-  async searchUsers(query: string): Promise<{ data: UserProfile[] | null; error: any }> {
+  async searchUsers(query: string, currentUserId?: string): Promise<{ data: UserProfile[] | null; error: any }> {
+    if (!currentUserId) {
+      // Fallback para busca básica se não tiver usuário atual
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .or(`username.ilike.%${query}%,full_name.ilike.%${query}%,email.ilike.%${query}%`)
+        .limit(10);
+      
+      return { data, error };
+    }
+
     const { data, error } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .or(`username.ilike.%${query}%,full_name.ilike.%${query}%,email.ilike.%${query}%`)
-      .limit(10);
-    
+      .rpc('search_users_excluding_blocked', {
+        search_term: query,
+        current_user_id: currentUserId
+      });
+
     return { data, error };
   },
 
@@ -82,6 +93,10 @@ export const chatService = {
       (data || []).map(async (conv: any) => {
         const otherUserId = conv.participant_1 === userId ? conv.participant_2 : conv.participant_1;
         
+        // Check if users are blocked
+        const { data: isBlocked } = await this.isUserBlocked(userId, otherUserId);
+        if (isBlocked) return null; // Skip blocked conversations
+        
         // Get other user profile
         const { data: otherUser } = await this.getUserProfile(otherUserId);
         
@@ -104,7 +119,10 @@ export const chatService = {
       })
     );
 
-    return { data: processedConversations, error: null };
+    // Filter out null values (blocked conversations)
+    const filteredConversations = processedConversations.filter(conv => conv !== null);
+
+    return { data: filteredConversations, error: null };
   },
 
   async getConversationMessages(conversationId: string): Promise<{ data: Message[] | null; error: any }> {
@@ -186,5 +204,52 @@ export const chatService = {
         callback
       )
       .subscribe();
+  },
+
+  // Bloqueio de usuários
+  async blockUser(blockerId: string, blockedId: string) {
+    const { data, error } = await supabase
+      .from('user_blocks')
+      .insert({
+        blocker_id: blockerId,
+        blocked_id: blockedId,
+      })
+      .select()
+      .single();
+
+    return { data, error };
+  },
+
+  async unblockUser(blockerId: string, blockedId: string) {
+    const { error } = await supabase
+      .from('user_blocks')
+      .delete()
+      .eq('blocker_id', blockerId)
+      .eq('blocked_id', blockedId);
+
+    return { error };
+  },
+
+  async getBlockedUsers(userId: string): Promise<{ data: UserBlock[] | null; error: any }> {
+    const { data, error } = await supabase
+      .from('user_blocks')
+      .select(`
+        *,
+        blocked_user:user_profiles!user_blocks_blocked_id_fkey(*)
+      `)
+      .eq('blocker_id', userId)
+      .order('created_at', { ascending: false });
+
+    return { data, error };
+  },
+
+  async isUserBlocked(blockerId: string, blockedId: string): Promise<{ data: boolean; error: any }> {
+    const { data, error } = await supabase
+      .rpc('is_user_blocked', {
+        blocker_uuid: blockerId,
+        blocked_uuid: blockedId
+      });
+
+    return { data: data || false, error };
   },
 };

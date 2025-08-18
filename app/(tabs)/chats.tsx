@@ -62,17 +62,17 @@ export default function ChatsScreen() {
       const { data, error } = await chatService.getOrCreateConversation(user.id, selectedUser.id);
       if (!error && data) {
         // Navigate to chat screen with conversation ID
-        router.push(`/chat/${data.id}?userName=${selectedUser.full_name || selectedUser.username}&avatar=${selectedUser.avatar_url || ''}`);
+        router.push(`/chat/${data.id}?userName=${selectedUser.full_name || selectedUser.username}&avatar=${selectedUser.avatar_url || ''}&otherUserId=${selectedUser.id}`);
       }
     } catch (error) {
       console.error('Error creating conversation:', error);
     }
   };
 
-  const handleChatPress = (conversation: Conversation) => {
+    const handleChatPress = (conversation: Conversation) => {
     const otherUser = conversation.other_user;
     if (otherUser) {
-      router.push(`/chat/${conversation.id}?userName=${otherUser.full_name || otherUser.username}&avatar=${otherUser.avatar_url || ''}`);
+      router.push(`/chat/${conversation.id}?userName=${otherUser.full_name || otherUser.username}&avatar=${otherUser.avatar_url || ''}&otherUserId=${otherUser.id}`);
     }
   };
 
