@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -21,30 +22,43 @@ import { chatService } from '@/services/endpoints/chat';
 import { Message } from '@/services/types';
 import { mediaService, MediaFile } from '@/services/media';
 import { screenProtection } from '@/services/screenshot-protection';
+import { typingService } from '@/services/typing';
+import { favoritesService } from '@/services/favorites';
 import MediaPicker from '@/components/ui/MediaPicker';
 import AudioRecorder from '@/components/ui/AudioRecorder';
+import MessageReactions from '@/components/ui/MessageReactions';
+import MessageActions from '@/components/ui/MessageActions';
+import ReadStatusIndicator from '@/components/ui/ReadStatusIndicator';
+import TypingIndicator from '@/components/ui/TypingIndicator';
 
 export default function ChatScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { settings } = useSettings();
   const { id: conversationId, userName, avatar, otherUserId } = useLocalSearchParams();
+  
+  // States
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
   const [mediaPickerVisible, setMediaPickerVisible] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState<string | null>(null);
+  const [actionsVisible, setActionsVisible] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const [otherUserTyping, setOtherUserTyping] = useState(false);
+  const [reactions, setReactions] = useState<{ [messageId: string]: { [emoji: string]: string[] } }>({});
+  
   const flatListRef = useRef<FlatList>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout>();
 
   // Private mode detection
   const isPrivateMode = settings.sexyModeEnabled;
 
   useEffect(() => {
     if (isPrivateMode) {
-      // Enable screenshot protection in private mode
       screenProtection.enableScreenProtection();
-      
       return () => {
         screenProtection.disableScreenProtection();
       };
@@ -63,7 +77,6 @@ export default function ChatScreen() {
         (payload) => {
           if (payload.new) {
             const newMsg = payload.new;
-            // Get sender info
             chatService.getUserProfile(newMsg.sender_id).then(({ data: sender }) => {
               setMessages(prev => [...prev, { ...newMsg, sender }]);
             });
@@ -71,8 +84,20 @@ export default function ChatScreen() {
         }
       );
 
+      // Subscribe to typing updates
+      const typingSubscription = typingService.subscribeToTyping(
+        conversationId as string,
+        (typingStatus) => {
+          if (typingStatus.userId !== user.id) {
+            setOtherUserTyping(typingStatus.isTyping);
+          }
+        }
+      );
+
       return () => {
         subscription.unsubscribe();
+        typingSubscription.unsubscribe();
+        typingService.cleanup();
       };
     }
   }, [conversationId, user, otherUserId]);
@@ -81,7 +106,6 @@ export default function ChatScreen() {
   useEffect(() => {
     return () => {
       if (isPrivateMode && messages.length > 0) {
-        // Clear messages from local state when leaving private chat
         setMessages([]);
       }
     };
@@ -140,6 +164,9 @@ export default function ChatScreen() {
     setNewMessage('');
     setSending(true);
 
+    // Stop typing indicator
+    await typingService.stopTyping(conversationId as string, user.id);
+
     try {
       const { data, error } = await chatService.sendMessage(
         conversationId as string,
@@ -149,7 +176,7 @@ export default function ChatScreen() {
 
       if (error) {
         showAlert('Erro', 'Não foi possível enviar a mensagem');
-        setNewMessage(messageText); // Restore message on error
+        setNewMessage(messageText);
       }
     } catch (error) {
       console.error('Error sending message:', error);
@@ -160,12 +187,39 @@ export default function ChatScreen() {
     }
   };
 
+  const handleTyping = async (text: string) => {
+    setNewMessage(text);
+
+    if (!user || !conversationId) return;
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    if (text.trim().length > 0) {
+      // Start typing
+      await typingService.updateTyping(
+        conversationId as string, 
+        user.id, 
+        userName as string
+      );
+
+      // Set timeout to stop typing
+      typingTimeoutRef.current = setTimeout(() => {
+        typingService.stopTyping(conversationId as string, user.id);
+      }, 3000);
+    } else {
+      // Stop typing immediately if text is empty
+      await typingService.stopTyping(conversationId as string, user.id);
+    }
+  };
+
   const handleMediaSelected = async (media: MediaFile) => {
     if (!conversationId || !user || isBlocked) return;
 
     setSending(true);
     try {
-      // For now, send media info as text (full implementation would upload to Supabase Storage)
       const mediaMessage = `[${media.type.toUpperCase()}${media.encrypted ? ' 🔒' : ''}] ${media.name}`;
       
       const { data, error } = await chatService.sendMessage(
@@ -225,6 +279,64 @@ export default function ChatScreen() {
     }
   };
 
+  const handleMessageLongPress = (messageId: string) => {
+    setSelectedMessage(messageId);
+    setActionsVisible(true);
+  };
+
+  const handleAddReaction = async (messageId: string, emoji: string) => {
+    if (!user) return;
+    
+    // Update local state
+    setReactions(prev => ({
+      ...prev,
+      [messageId]: {
+        ...prev[messageId],
+        [emoji]: [...(prev[messageId]?.[emoji] || []), user.id]
+      }
+    }));
+  };
+
+  const handleRemoveReaction = async (messageId: string, emoji: string) => {
+    if (!user) return;
+    
+    // Update local state
+    setReactions(prev => ({
+      ...prev,
+      [messageId]: {
+        ...prev[messageId],
+        [emoji]: (prev[messageId]?.[emoji] || []).filter(id => id !== user.id)
+      }
+    }));
+  };
+
+  const handleToggleFavorite = async (messageId: string) => {
+    const message = messages.find(m => m.id === messageId);
+    if (!message) return;
+
+    try {
+      const isFavorited = await favoritesService.isFavorited(messageId);
+      
+      if (isFavorited) {
+        await favoritesService.removeFromFavorites(messageId);
+        showAlert('Removido', 'Mensagem removida dos favoritos');
+      } else {
+        await favoritesService.addToFavorites(
+          messageId,
+          conversationId as string,
+          message.content,
+          message.sender?.full_name || message.sender?.username || 'Usuário',
+          message.created_at,
+          message.message_type as any
+        );
+        showAlert('Favoritado', 'Mensagem adicionada aos favoritos');
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      showAlert('Erro', 'Não foi possível favoritar a mensagem');
+    }
+  };
+
   const scrollToBottom = () => {
     if (flatListRef.current && messages.length > 0) {
       flatListRef.current.scrollToEnd({ animated: true });
@@ -236,32 +348,60 @@ export default function ChatScreen() {
     return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   };
 
+  const getMessageStatus = (message: Message) => {
+    if (message.sender_id !== user?.id) return null;
+    
+    if (sending) return 'sending';
+    if (message.is_read) return 'read';
+    return 'delivered';
+  };
+
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
     const isMyMessage = item.sender_id === user?.id;
     const showAvatar = !isMyMessage && (index === 0 || messages[index - 1].sender_id !== item.sender_id);
+    const messageReactions = reactions[item.id] || {};
 
     return (
-      <View style={[styles.messageContainer, isMyMessage ? styles.myMessageContainer : styles.otherMessageContainer]}>
-        {showAvatar && !isMyMessage && (
-          <Image
-            source={{ 
-              uri: avatar as string || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=40&h=40&fit=crop&crop=face'
-            }}
-            style={styles.messageAvatar}
-          />
-        )}
-        {!showAvatar && !isMyMessage && <View style={styles.avatarSpacer} />}
-        
-        <View style={[styles.messageBubble, isMyMessage ? styles.myMessageBubble : styles.otherMessageBubble]}>
-          <Text style={[styles.messageText, isMyMessage ? styles.myMessageText : styles.otherMessageText]}>
-            {item.content}
-            {isPrivateMode && ' 🔒'}
-          </Text>
-          <Text style={[styles.messageTime, isMyMessage ? styles.myMessageTime : styles.otherMessageTime]}>
-            {formatMessageTime(item.created_at)}
-          </Text>
+      <TouchableOpacity
+        onLongPress={() => handleMessageLongPress(item.id)}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.messageContainer, isMyMessage ? styles.myMessageContainer : styles.otherMessageContainer]}>
+          {showAvatar && !isMyMessage && (
+            <Image
+              source={{ 
+                uri: avatar as string || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=40&h=40&fit=crop&crop=face'
+              }}
+              style={styles.messageAvatar}
+            />
+          )}
+          {!showAvatar && !isMyMessage && <View style={styles.avatarSpacer} />}
+          
+          <View style={[styles.messageBubble, isMyMessage ? styles.myMessageBubble : styles.otherMessageBubble]}>
+            <Text style={[styles.messageText, isMyMessage ? styles.myMessageText : styles.otherMessageText]}>
+              {item.content}
+              {isPrivateMode && ' 🔒'}
+            </Text>
+            
+            <View style={styles.messageFooter}>
+              <Text style={[styles.messageTime, isMyMessage ? styles.myMessageTime : styles.otherMessageTime]}>
+                {formatMessageTime(item.created_at)}
+              </Text>
+              {isMyMessage && (
+                <ReadStatusIndicator status={getMessageStatus(item) || 'sent'} />
+              )}
+            </View>
+          </View>
         </View>
-      </View>
+
+        <MessageReactions
+          messageId={item.id}
+          reactions={messageReactions}
+          currentUserId={user?.id || ''}
+          onAddReaction={handleAddReaction}
+          onRemoveReaction={handleRemoveReaction}
+        />
+      </TouchableOpacity>
     );
   };
 
@@ -287,7 +427,9 @@ export default function ChatScreen() {
                 {isPrivateMode && ' 😈'}
               </Text>
               <Text style={styles.headerStatus}>
-                {isBlocked ? 'Bloqueado' : isPrivateMode ? 'Modo Privado Ativo' : 'online'}
+                {isBlocked ? 'Bloqueado' : 
+                 otherUserTyping ? 'digitando...' :
+                 isPrivateMode ? 'Modo Privado Ativo' : 'online'}
               </Text>
             </View>
           </View>
@@ -341,6 +483,14 @@ export default function ChatScreen() {
               </View>
             ) : null
           }
+          ListFooterComponent={
+            otherUserTyping ? (
+              <TypingIndicator 
+                isTyping={otherUserTyping} 
+                userName={userName as string} 
+              />
+            ) : null
+          }
         />
 
         {/* Input */}
@@ -366,7 +516,7 @@ export default function ChatScreen() {
                 placeholder={isPrivateMode ? "Mensagem privada... 😈" : "Digite uma mensagem..."}
                 placeholderTextColor={Colors.textMuted}
                 value={newMessage}
-                onChangeText={setNewMessage}
+                onChangeText={handleTyping}
                 multiline
                 maxLength={1000}
               />
@@ -399,6 +549,21 @@ export default function ChatScreen() {
           onMediaSelected={handleMediaSelected}
           enableEncryption={isPrivateMode}
           userId={user?.id}
+        />
+
+        {/* Message Actions Modal */}
+        <MessageActions
+          visible={actionsVisible}
+          onClose={() => setActionsVisible(false)}
+          messageId={selectedMessage || ''}
+          isOwnMessage={selectedMessage ? messages.find(m => m.id === selectedMessage)?.sender_id === user?.id : false}
+          isFavorited={false}
+          onEdit={(messageId) => console.log('Edit:', messageId)}
+          onDelete={(messageId) => console.log('Delete:', messageId)}
+          onToggleFavorite={handleToggleFavorite}
+          onReply={(messageId) => console.log('Reply:', messageId)}
+          onForward={(messageId) => console.log('Forward:', messageId)}
+          onCopy={(messageId) => console.log('Copy:', messageId)}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -524,14 +689,19 @@ const styles = StyleSheet.create({
   otherMessageText: {
     color: Colors.text,
   },
+  messageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginTop: 4,
+  },
   messageTime: {
     fontSize: 11,
-    marginTop: 4,
   },
   myMessageTime: {
     color: Colors.text,
     opacity: 0.7,
-    textAlign: 'right',
+    marginRight: 4,
   },
   otherMessageTime: {
     color: Colors.textMuted,

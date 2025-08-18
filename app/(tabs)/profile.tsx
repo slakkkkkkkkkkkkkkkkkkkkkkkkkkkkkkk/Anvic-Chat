@@ -1,17 +1,40 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/hooks/useAuth';
+import { mediaService } from '@/services/media';
+import { biometricService } from '@/services/biometric';
 import BlockedUsersModal from '@/components/ui/BlockedUsersModal';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, updateProfile } = useAuth();
   const [blockedUsersModalVisible, setBlockedUsersModalVisible] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [editedProfile, setEditedProfile] = useState({
+    full_name: profile?.full_name || '',
+    bio: profile?.bio || '',
+    relationship_status: profile?.relationship_status || '',
+  });
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricType, setBiometricType] = useState('');
+  
+  React.useEffect(() => {
+    loadBiometricConfig();
+  }, []);
+
+  const loadBiometricConfig = async () => {
+    const config = await biometricService.getConfig();
+    setBiometricEnabled(config.enabled);
+    if (config.enabled) {
+      const typeDesc = await biometricService.getBiometricTypeDescription();
+      setBiometricType(typeDesc);
+    }
+  };
 
   const showAlert = (title: string, message: string) => {
     if (Platform.OS === 'web') {
@@ -97,7 +120,10 @@ export default function ProfileScreen() {
           <Text style={styles.profileName}>{profile.full_name || 'Usuário'}</Text>
           <Text style={styles.profileUsername}>@{profile.username}</Text>
           <Text style={styles.profileEmail}>{profile.email}</Text>
-          <TouchableOpacity style={styles.editProfileButton}>
+          <TouchableOpacity 
+            style={styles.editProfileButton}
+            onPress={() => setEditingProfile(true)}
+          >
             <Text style={styles.editProfileText}>Editar Perfil</Text>
           </TouchableOpacity>
         </View>
@@ -146,6 +172,13 @@ export default function ProfileScreen() {
           />
           
           <ProfileOption
+            icon="fingerprint"
+            title="Autenticação Biométrica"
+            subtitle={biometricEnabled ? `Ativo - ${biometricType}` : 'Desativado'}
+            onPress={handleBiometricToggle}
+          />
+          
+          <ProfileOption
             icon="help"
             title="Ajuda"
             subtitle="FAQ e suporte"
@@ -172,8 +205,152 @@ export default function ProfileScreen() {
         visible={blockedUsersModalVisible}
         onClose={() => setBlockedUsersModalVisible(false)}
       />
+
+      {/* Edit Profile Modal */}
+      {editingProfile && (
+        <Modal visible={editingProfile} animationType="slide" presentationStyle="pageSheet">
+          <SafeAreaView style={styles.container} edges={['top']}>
+            <View style={styles.header}>
+              <TouchableOpacity onPress={() => setEditingProfile(false)}>
+                <MaterialIcons name="close" size={24} color={Colors.text} />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>Editar Perfil</Text>
+              <TouchableOpacity onPress={handleSaveProfile}>
+                <Text style={[styles.headerTitle, { color: Colors.primary, fontSize: 16 }]}>Salvar</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+              <View style={styles.profileSection}>
+                <View style={styles.avatarContainer}>
+                  <Image
+                    source={{ 
+                      uri: profile?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
+                    }}
+                    style={styles.profileImage}
+                  />
+                  <TouchableOpacity 
+                    style={styles.changeAvatarButton}
+                    onPress={handleChangeAvatar}
+                  >
+                    <MaterialIcons name="camera-alt" size={20} color={Colors.text} />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.formContainer}>
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>Nome Completo</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={editedProfile.full_name}
+                      onChangeText={(text) => setEditedProfile(prev => ({ ...prev, full_name: text }))}
+                      placeholder="Seu nome completo"
+                      placeholderTextColor={Colors.textMuted}
+                    />
+                  </View>
+
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>Bio</Text>
+                    <TextInput
+                      style={[styles.textInput, styles.textArea]}
+                      value={editedProfile.bio}
+                      onChangeText={(text) => setEditedProfile(prev => ({ ...prev, bio: text }))}
+                      placeholder="Conte um pouco sobre você..."
+                      placeholderTextColor={Colors.textMuted}
+                      multiline
+                      numberOfLines={3}
+                    />
+                  </View>
+
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>Status de Relacionamento</Text>
+                    <View style={styles.relationshipContainer}>
+                      {['Solteiro(a)', 'Namorando', 'Casado(a)', 'Complicado', 'Não informar'].map((status) => (
+                        <TouchableOpacity
+                          key={status}
+                          style={[
+                            styles.relationshipOption,
+                            editedProfile.relationship_status === status && styles.relationshipOptionSelected
+                          ]}
+                          onPress={() => setEditedProfile(prev => ({ ...prev, relationship_status: status }))}
+                        >
+                          <Text style={[
+                            styles.relationshipOptionText,
+                            editedProfile.relationship_status === status && styles.relationshipOptionTextSelected
+                          ]}>
+                            {status}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </ScrollView>
+          </SafeAreaView>
+        </Modal>
+      )}
     </SafeAreaView>
   );
+
+  const handleChangeAvatar = async () => {
+    try {
+      const photo = await mediaService.pickImage();
+      if (photo && user) {
+        // Em uma implementação real, você faria upload para o Supabase Storage
+        // Por enquanto, apenas atualizamos localmente
+        await updateProfile({ avatar_url: photo.uri });
+        showAlert('Sucesso', 'Foto de perfil atualizada!');
+      }
+    } catch (error) {
+      showAlert('Erro', 'Não foi possível alterar a foto de perfil');
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      await updateProfile(editedProfile);
+      setEditingProfile(false);
+      showAlert('Sucesso', 'Perfil atualizado com sucesso!');
+    } catch (error) {
+      showAlert('Erro', 'Não foi possível salvar o perfil');
+    }
+  };
+
+  const handleBiometricToggle = async () => {
+    if (biometricEnabled) {
+      // Desativar biometria
+      const success = await biometricService.configureBiometric(false);
+      if (success) {
+        setBiometricEnabled(false);
+        setBiometricType('');
+        showAlert('Biometria Desativada', 'Autenticação biométrica foi desativada');
+      }
+    } else {
+      // Ativar biometria
+      const { available, enrolled } = await biometricService.isBiometricAvailable();
+      
+      if (!available) {
+        showAlert('Indisponível', 'Este dispositivo não suporta autenticação biométrica');
+        return;
+      }
+      
+      if (!enrolled) {
+        showAlert('Não Configurado', 'Configure uma biometria nas configurações do dispositivo primeiro');
+        return;
+      }
+
+      const success = await biometricService.configureBiometric(true);
+      if (success) {
+        setBiometricEnabled(true);
+        const typeDesc = await biometricService.getBiometricTypeDescription();
+        setBiometricType(typeDesc);
+        showAlert('Biometria Ativada', `Autenticação por ${typeDesc} foi ativada`);
+      } else {
+        showAlert('Erro', 'Não foi possível ativar a autenticação biométrica');
+      }
+    }
+  };
 }
 
 const styles = StyleSheet.create({
@@ -229,7 +406,13 @@ const styles = StyleSheet.create({
   profileEmail: {
     color: Colors.textSecondary,
     fontSize: 14,
+    marginBottom: 4,
+  },
+  profileRelationship: {
+    color: Colors.primary,
+    fontSize: 14,
     marginBottom: 20,
+    fontStyle: 'italic',
   },
   editProfileButton: {
     backgroundColor: Colors.primary,
@@ -292,5 +475,75 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  avatarContainer: {
+    position: 'relative',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  changeAvatarButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: Colors.primary,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Colors.background,
+  },
+  formContainer: {
+    width: '100%',
+    paddingHorizontal: 20,
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  textInput: {
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    color: Colors.text,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  relationshipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  relationshipOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  relationshipOptionSelected: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  relationshipOptionText: {
+    color: Colors.text,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  relationshipOptionTextSelected: {
+    color: Colors.text,
   },
 });
