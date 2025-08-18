@@ -2,6 +2,7 @@ import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '@supabase/supabase-js';
 import { authService } from '@/services/endpoints/auth';
 import { chatService } from '@/services/endpoints/chat';
+import { presenceService } from '@/services/presence';
 import { UserProfile } from '@/services/types';
 
 interface AuthContextType {
@@ -10,7 +11,7 @@ interface AuthContextType {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string, fullName: string, username: string) => Promise<{ error: any }>;
-    signOut: () => Promise<void>;
+  signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
 }
@@ -28,6 +29,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         loadUserProfile(session.user.id);
+        // Initialize presence service
+        presenceService.initialize(session.user.id, true);
       } else {
         setLoading(false);
       }
@@ -39,8 +42,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (session?.user) {
         await loadUserProfile(session.user.id);
+        // Initialize presence service
+        await presenceService.initialize(session.user.id, true);
       } else {
         setProfile(null);
+        // Cleanup presence service
+        presenceService.cleanup();
         setLoading(false);
       }
     });
@@ -86,13 +93,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     setLoading(true);
+    // Cleanup presence service first
+    presenceService.cleanup();
     await authService.signOut();
     setUser(null);
     setProfile(null);
     setLoading(false);
   };
 
-    const resetPassword = async (email: string) => {
+  const resetPassword = async (email: string) => {
     const { error } = await authService.resetPassword(email);
     return { error };
   };
