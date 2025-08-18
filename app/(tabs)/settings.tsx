@@ -29,6 +29,7 @@ export default function SettingsScreen() {
   const [showFontFamilyModal, setShowFontFamilyModal] = useState(false);
   const [showWallpaperModal, setShowWallpaperModal] = useState(false);
   const [blockedUsersModalVisible, setBlockedUsersModalVisible] = useState(false);
+  const [showAboutModal, setShowAboutModal] = useState(false);
 
   const currentTheme = Themes[settings.theme];
   const currentFontSize = FontSizes[settings.fontSize];
@@ -155,6 +156,75 @@ export default function SettingsScreen() {
               )}
             </TouchableOpacity>
           ))}
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+
+  const AboutModal = () => (
+    <Modal visible={showAboutModal} animationType="slide" presentationStyle="pageSheet">
+      <View style={[styles.modalContainer, { backgroundColor: currentTheme.background }]}>
+        <View style={[styles.modalHeader, { borderBottomColor: currentTheme.border }]}>
+          <TouchableOpacity onPress={() => setShowAboutModal(false)}>
+            <MaterialIcons name="close" size={24} color={currentTheme.text} />
+          </TouchableOpacity>
+          <Text style={[styles.modalTitle, { color: currentTheme.text }]}>Sobre o Anvic</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.aboutContent}>
+            <Image
+              source={{ uri: 'https://cdn-ai.onspace.ai/onspace/project/image/VJ6xPwy5YEJJnwQo4nrm6M/logo.png' }}
+              style={styles.aboutLogo}
+              contentFit="contain"
+            />
+            
+            <Text style={[styles.aboutTitle, { color: currentTheme.text }]}>ANVIC</Text>
+            <Text style={[styles.aboutVersion, { color: currentTheme.primary }]}>Versão 1.0.0</Text>
+            
+            <View style={[styles.aboutSection, { backgroundColor: currentTheme.surface }]}>
+              <MaterialIcons name="security" size={24} color={currentTheme.primary} />
+              <Text style={[styles.aboutDescription, { color: currentTheme.text }]}>
+                O app foi desenvolvido com tecnologia avançada de segurança e privacidade, garantindo que suas conversas, arquivos e informações pessoais estejam sempre protegidos. Navegue, converse e compartilhe com tranquilidade — com o Anvic, sua privacidade vem em primeiro lugar.
+              </Text>
+            </View>
+
+            <View style={[styles.creditsSection, { backgroundColor: currentTheme.surface }]}>
+              <MaterialIcons name="person" size={24} color={currentTheme.primary} />
+              <View style={styles.creditsText}>
+                <Text style={[styles.creditsTitle, { color: currentTheme.text }]}>Desenvolvido por</Text>
+                <Text style={[styles.developerName, { color: currentTheme.primary }]}>Victor Alefe Fernandes Dos Anjos</Text>
+                
+                <Text style={[styles.creditsTitle, { color: currentTheme.text, marginTop: 16 }]}>Plataforma</Text>
+                <Text style={[styles.platformName, { color: currentTheme.primary }]}>OnSpace.ai</Text>
+                
+                <Text style={[styles.copyright, { color: currentTheme.textMuted, marginTop: 16 }]}>
+                  © 2025 OnSpace.ai. Todos os direitos reservados.
+                </Text>
+              </View>
+            </View>
+
+            <View style={[styles.featuresSection, { backgroundColor: currentTheme.surface }]}>
+              <MaterialIcons name="star" size={24} color={currentTheme.primary} />
+              <View style={styles.featuresText}>
+                <Text style={[styles.featuresTitle, { color: currentTheme.text }]}>Recursos Principais</Text>
+                <Text style={[styles.featuresList, { color: currentTheme.textSecondary }]}>
+                  • Mensagens criptografadas end-to-end{'\n'}
+                  • Chamadas de voz e vídeo HD{'\n'}
+                  • Assistente IA integrado{'\n'}
+                  • Jogos multiplayer{'\n'}
+                  • Modo privado avançado{'\n'}
+                  • Sincronização multiplataforma
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.supportSection}>
+              <Text style={[styles.supportText, { color: currentTheme.textMuted }]}>
+                Para suporte e mais informações, visite onspace.ai
+              </Text>
+            </View>
+          </View>
         </ScrollView>
       </View>
     </Modal>
@@ -294,10 +364,17 @@ export default function SettingsScreen() {
               }
             }}
           />
+          <SettingsItem
+            icon="info"
+            title="Sobre o Anvic"
+            subtitle="Informações do app e desenvolvedor"
+            onPress={() => setShowAboutModal(true)}
+          />
         </SettingsSection>
       </ScrollView>
 
       <ThemeModal />
+      <AboutModal />
       
       <BlockedUsersModal
         visible={blockedUsersModalVisible}
@@ -400,5 +477,102 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '500',
+  },
+  aboutContent: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  aboutLogo: {
+    width: 80,
+    height: 80,
+    marginBottom: 16,
+    borderRadius: 12,
+  },
+  aboutTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    letterSpacing: 2,
+    marginBottom: 8,
+  },
+  aboutVersion: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 24,
+  },
+  aboutSection: {
+    flexDirection: 'row',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    width: '100%',
+  },
+  aboutDescription: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    marginLeft: 12,
+    textAlign: 'justify',
+  },
+  creditsSection: {
+    flexDirection: 'row',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    width: '100%',
+  },
+  creditsText: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  creditsTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    opacity: 0.8,
+  },
+  developerName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginTop: 4,
+  },
+  platformName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginTop: 4,
+  },
+  copyright: {
+    fontSize: 11,
+    fontStyle: 'italic',
+  },
+  featuresSection: {
+    flexDirection: 'row',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    width: '100%',
+  },
+  featuresText: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  featuresTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  featuresList: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  supportSection: {
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+  },
+  supportText: {
+    fontSize: 12,
+    textAlign: 'center',
   },
 });
