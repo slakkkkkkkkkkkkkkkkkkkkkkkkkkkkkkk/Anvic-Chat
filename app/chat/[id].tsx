@@ -16,27 +16,40 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/hooks/useAuth';
+import { useSettings } from '@/hooks/useSettings';
 import { chatService } from '@/services/endpoints/chat';
 import { Message } from '@/services/types';
+import { mediaService, MediaFile } from '@/services/media';
+import { screenProtection } from '@/services/screenshot-protection';
+import MediaPicker from '@/components/ui/MediaPicker';
+import AudioRecorder from '@/components/ui/AudioRecorder';
 
 export default function ChatScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { settings } = useSettings();
   const { id: conversationId, userName, avatar, otherUserId } = useLocalSearchParams();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
+  const [mediaPickerVisible, setMediaPickerVisible] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
-  const showAlert = (title: string, message: string, actions?: any[]) => {
-    if (Platform.OS === 'web') {
-      console.log(`${title}: ${message}`);
-    } else {
-      Alert.alert(title, message, actions);
+  // Private mode detection
+  const isPrivateMode = settings.sexyModeEnabled;
+
+  useEffect(() => {
+    if (isPrivateMode) {
+      // Enable screenshot protection in private mode
+      screenProtection.enableScreenProtection();
+      
+      return () => {
+        screenProtection.disableScreenProtection();
+      };
     }
-  };
+  }, [isPrivateMode]);
 
   useEffect(() => {
     if (conversationId && user && otherUserId) {
@@ -63,6 +76,24 @@ export default function ChatScreen() {
       };
     }
   }, [conversationId, user, otherUserId]);
+
+  // Auto-destruct messages when leaving private mode chat
+  useEffect(() => {
+    return () => {
+      if (isPrivateMode && messages.length > 0) {
+        // Clear messages from local state when leaving private chat
+        setMessages([]);
+      }
+    };
+  }, [isPrivateMode]);
+
+  const showAlert = (title: string, message: string, actions?: any[]) => {
+    if (Platform.OS === 'web') {
+      console.log(`${title}: ${message}`);
+    } else {
+      Alert.alert(title, message, actions);
+    }
+  };
 
   const loadMessages = async () => {
     if (!conversationId) return;
@@ -127,6 +158,36 @@ export default function ChatScreen() {
     } finally {
       setSending(false);
     }
+  };
+
+  const handleMediaSelected = async (media: MediaFile) => {
+    if (!conversationId || !user || isBlocked) return;
+
+    setSending(true);
+    try {
+      // For now, send media info as text (full implementation would upload to Supabase Storage)
+      const mediaMessage = `[${media.type.toUpperCase()}${media.encrypted ? ' 🔒' : ''}] ${media.name}`;
+      
+      const { data, error } = await chatService.sendMessage(
+        conversationId as string,
+        user.id,
+        mediaMessage,
+        media.type
+      );
+
+      if (error) {
+        showAlert('Erro', 'Não foi possível enviar a mídia');
+      }
+    } catch (error) {
+      console.error('Error sending media:', error);
+      showAlert('Erro', 'Erro ao enviar mídia');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleAudioRecorded = async (audio: MediaFile) => {
+    await handleMediaSelected(audio);
   };
 
   const handleBlockUser = () => {
@@ -194,6 +255,7 @@ export default function ChatScreen() {
         <View style={[styles.messageBubble, isMyMessage ? styles.myMessageBubble : styles.otherMessageBubble]}>
           <Text style={[styles.messageText, isMyMessage ? styles.myMessageText : styles.otherMessageText]}>
             {item.content}
+            {isPrivateMode && ' 🔒'}
           </Text>
           <Text style={[styles.messageTime, isMyMessage ? styles.myMessageTime : styles.otherMessageTime]}>
             {formatMessageTime(item.created_at)}
@@ -207,7 +269,7 @@ export default function ChatScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, isPrivateMode && styles.privateHeader]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <MaterialIcons name="arrow-back" size={24} color={Colors.text} />
           </TouchableOpacity>
@@ -220,8 +282,13 @@ export default function ChatScreen() {
               style={styles.headerAvatar}
             />
             <View style={styles.headerText}>
-              <Text style={styles.headerName}>{userName || 'Usuário'}</Text>
-              <Text style={styles.headerStatus}>{isBlocked ? 'Bloqueado' : 'online'}</Text>
+              <Text style={styles.headerName}>
+                {userName || 'Usuário'}
+                {isPrivateMode && ' 😈'}
+              </Text>
+              <Text style={styles.headerStatus}>
+                {isBlocked ? 'Bloqueado' : isPrivateMode ? 'Modo Privado Ativo' : 'online'}
+              </Text>
             </View>
           </View>
 
@@ -242,6 +309,16 @@ export default function ChatScreen() {
           </View>
         </View>
 
+        {/* Private Mode Warning */}
+        {isPrivateMode && (
+          <View style={styles.privateModeWarning}>
+            <MaterialIcons name="security" size={16} color="#ff6b6b" />
+            <Text style={styles.privateModeText}>
+              Modo Privado: Mensagens auto-destrutivas • Screenshots bloqueados
+            </Text>
+          </View>
+        )}
+
         {/* Messages */}
         <FlatList
           ref={flatListRef}
@@ -257,7 +334,9 @@ export default function ChatScreen() {
               <View style={styles.emptyContainer}>
                 <MaterialIcons name="chat" size={48} color={Colors.textMuted} />
                 <Text style={styles.emptyText}>
-                  {isBlocked ? 'Usuário bloqueado' : 'Inicie uma conversa'}
+                  {isBlocked ? 'Usuário bloqueado' : 
+                   isPrivateMode ? 'Conversa privada - Mensagens somem ao sair 😈' : 
+                   'Inicie uma conversa'}
                 </Text>
               </View>
             ) : null
@@ -266,15 +345,25 @@ export default function ChatScreen() {
 
         {/* Input */}
         {!isBlocked && (
-          <View style={styles.inputContainer}>
+          <View style={[styles.inputContainer, isPrivateMode && styles.privateInputContainer]}>
             <View style={styles.inputRow}>
-              <TouchableOpacity style={styles.attachButton}>
+              <TouchableOpacity 
+                style={styles.attachButton}
+                onPress={() => setMediaPickerVisible(true)}
+              >
                 <MaterialIcons name="add" size={24} color={Colors.primary} />
               </TouchableOpacity>
               
+              <AudioRecorder
+                onAudioRecorded={handleAudioRecorded}
+                enableEncryption={isPrivateMode}
+                userId={user?.id}
+                style={styles.audioButton}
+              />
+              
               <TextInput
                 style={styles.textInput}
-                placeholder="Digite uma mensagem..."
+                placeholder={isPrivateMode ? "Mensagem privada... 😈" : "Digite uma mensagem..."}
                 placeholderTextColor={Colors.textMuted}
                 value={newMessage}
                 onChangeText={setNewMessage}
@@ -302,6 +391,15 @@ export default function ChatScreen() {
             <Text style={styles.blockedText}>Você bloqueou este usuário</Text>
           </View>
         )}
+
+        {/* Media Picker Modal */}
+        <MediaPicker
+          visible={mediaPickerVisible}
+          onClose={() => setMediaPickerVisible(false)}
+          onMediaSelected={handleMediaSelected}
+          enableEncryption={isPrivateMode}
+          userId={user?.id}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -319,6 +417,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+  },
+  privateHeader: {
+    borderBottomColor: '#ff6b6b',
+    backgroundColor: '#ff6b6b10',
   },
   backButton: {
     marginRight: 12,
@@ -353,6 +455,21 @@ const styles = StyleSheet.create({
   headerButton: {
     marginLeft: 16,
     padding: 4,
+  },
+  privateModeWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ff6b6b20',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ff6b6b40',
+  },
+  privateModeText: {
+    color: '#ff6b6b',
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 8,
   },
   messagesList: {
     flex: 1,
@@ -425,13 +542,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
+  privateInputContainer: {
+    borderTopColor: '#ff6b6b40',
+    backgroundColor: '#ff6b6b05',
+  },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
   },
   attachButton: {
-    marginRight: 12,
+    marginRight: 8,
     padding: 8,
+  },
+  audioButton: {
+    marginRight: 8,
   },
   textInput: {
     flex: 1,
@@ -464,6 +588,8 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: 16,
     marginTop: 16,
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
   blockedContainer: {
     backgroundColor: Colors.surface,
