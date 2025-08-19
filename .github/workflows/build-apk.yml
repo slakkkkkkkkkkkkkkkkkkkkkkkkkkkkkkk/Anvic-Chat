@@ -21,9 +21,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-
       - name: Install dependencies
-        run: npm ci  # Usa npm ci para instalação determinística
-        env:
-          NODE_ENV: production  # Evita scripts desnecessários
+        run: npm ci  # Instalação limpa
       - name: Set up Expo CLI
         run: npm install -g expo-cli
       - name: Build APK
