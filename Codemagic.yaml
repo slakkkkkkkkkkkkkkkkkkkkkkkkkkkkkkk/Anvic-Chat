@@ -1,26 +1,17 @@
 workflows:
-  android-workflow:
-    name: Build Android APK
-    instance_type: mac_mini_m1
+  anvic-expo-android:
+    name: Anvic Expo Android Build
+    max_build_duration: 120
+    environment:
+      node: latest
     scripts:
-      - name: Check and Build
+      - name: Build Android com EAS
         script: |
-          if [ -f *.apk ]; then
-            echo "Found pre-built APK."
-            mkdir -p artifacts
-            cp *.apk artifacts/
-          elif [ -f build.gradle ]; then
-            echo "Building Android native project."
-            chmod +x gradlew
-            ./gradlew assembleDebug
-          elif [ -d dist ] || [ -d build ]; then
-            echo "Copying existing build folder."
-            mkdir -p artifacts
-            cp -r dist/* build/* artifacts/ || echo "No content in dist or build."
-          else
-            echo "No build configuration or APK found. Add a pre-built APK or configure a build script."
-            exit 1
-          fi
+          npm install -g eas-cli
+          npx eas-cli build --platform android --non-interactive
     artifacts:
-      - artifacts/
-      - app/build/outputs/apk/debug/*.apk
+      - '**/*.apk'
+    publishing:
+      email:
+        recipients:
+          - victoralefefrnandes@gmail.com
