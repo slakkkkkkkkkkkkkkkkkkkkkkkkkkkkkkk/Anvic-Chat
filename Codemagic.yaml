@@ -2,6 +2,8 @@ workflows:
   android-workflow:
     name: Build Android APK
     instance_type: mac_mini_m1
+    environment:
+      android_sdk: default
     scripts:
       - name: Check and Build
         script: |
@@ -18,7 +20,7 @@ workflows:
             mkdir -p artifacts
             cp -r dist/* build/* artifacts/ || echo "No content in dist or build."
           else
-            echo "No build configuration or APK found. Add a pre-built APK or configure a build script."
+            echo "No build configuration or APK found. Please add a pre-built APK or configure a build script."
             exit 1
           fi
     artifacts:
