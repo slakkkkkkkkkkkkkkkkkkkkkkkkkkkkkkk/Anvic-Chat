@@ -2,7 +2,7 @@ name: Build Android Debug APK
 on:
   push:
     branches:
-      - main  # Altere para o branch do repositório (ex.: master, se necessário)
+      - main  # Ajuste para o branch correto (ex.: master)
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -12,9 +12,18 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'  # Versão compatível com Expo
+          node-version: '18'  # Compatível com Expo
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
       - name: Install dependencies
-        run: npm install
+        run: npm ci  # Usa npm ci para instalação determinística
+        env:
+          NODE_ENV: production  # Evita scripts desnecessários
       - name: Set up Expo CLI
         run: npm install -g expo-cli
       - name: Build APK
@@ -27,4 +36,4 @@ jobs:
         with:
           name: app-debug
           path: '*.apk'
-          retention-days: 30  # Opcional: mantém o artefato por 30 dias
+          retention-days: 30
