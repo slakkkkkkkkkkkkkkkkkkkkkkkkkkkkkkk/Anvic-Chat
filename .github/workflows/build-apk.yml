@@ -3,16 +3,19 @@ on:
   push:
     branches:
       - main  # Ajuste para o branch correto (ex.: master)
+  workflow_dispatch:  # Permite disparar manualmente via UI
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'  # Compatível com Expo
+          node-version: '18'  # Versão recomendada para Expo em 2025
+
       - name: Cache node modules
         uses: actions/cache@v4
         with:
@@ -20,18 +23,35 @@ jobs:
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-node-
+
       - name: Install dependencies
-        run: npm ci  # Instalação limpa
+        run: npm ci  # Usa npm ci para instalação limpa e reprodutível
+
       - name: Set up Expo CLI
         run: npm install -g expo-cli
+
+      - name: Configure AWS CLI (opcional, se usar serviços AWS)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1  # Ajuste a região
+        if: ${{ secrets.AWS_ACCESS_KEY_ID != null }}  # Executa apenas se secrets existirem
+
       - name: Build APK
         run: expo build:android -t apk --no-publish
         env:
           EXPO_USERNAME: ${{ secrets.EXPO_USERNAME }}
           EXPO_PASSWORD: ${{ secrets.EXPO_PASSWORD }}
+        continue-on-error: false  # Para falhas, interrompe o workflow
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: '*.apk'
-          retention-days: 30
+          retention-days: 30  # Mantém o artefato por 30 dias
+
+      - name: Notify failure (optional)
+        if: failure()
+        run: echo "Build failed! Check the logs for details."
