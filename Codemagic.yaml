@@ -5,10 +5,10 @@ workflows:
     environment:
       node: latest
     scripts:
-      - name: Instalar dependências ignorando conflitos
+      - name: Instalar dependências forçando resolução
         script: |
           npm install -g eas-cli
-          npm install --legacy-peer-deps
+          npm install --force
       - name: Build Android com EAS
         script: |
           npx eas-cli build --platform android --non-interactive
@@ -17,4 +17,5 @@ workflows:
     publishing:
       email:
         recipients:
-          - victoralefefernandes@gmail.com
+          - victoralefefernandes@outlook.com
+          
