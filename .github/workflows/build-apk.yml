@@ -1,4 +1,4 @@
-name: Build OnSpace App Artifact
+name: Build OnSpace App Artifact (No Dependencies)
 on:
   push:
     branches:
@@ -11,46 +11,27 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install dependencies (if applicable)
-        run: |
-          if [ -f package.json ]; then
-            npm install
-          fi
-
       - name: Detect and Build
         run: |
-          if [ -f build.gradle ]; then
-            echo "Building Android native project."
-            chmod +x gradlew
-            ./gradlew assembleDebug
-          elif [ -f package.json ] && grep -q "build" package.json; then
-            echo "Building with npm run build."
-            npm run build
+          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            echo "APK already exists, copying to artifacts."
+            mkdir -p artifacts
+            cp app/build/outputs/apk/debug/app-debug.apk artifacts/
+          elif [ -d dist ] || [ -d build ]; then
+            echo "Found dist or build folder, copying to artifacts."
+            mkdir -p artifacts
+            cp -r dist/* build/* artifacts/ || echo "No dist or build content found."
+          elif [ -f *.apk ]; then
+            echo "Found loose APK, copying to artifacts."
+            mkdir -p artifacts
+            cp *.apk artifacts/
           else
-            echo "No standard build configuration found. Please add a build script or gradle file."
+            echo "No pre-built APK or build folder found. Add a build script or precompiled APK."
             exit 1
           fi
         continue-on-error: false
 
       - name: Upload Artifact
-        run: |
-          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
-            mkdir -p artifacts
-            cp app/build/outputs/apk/debug/app-debug.apk artifacts/
-          elif [ -d dist ] || [ -d build ]; then
-            mkdir -p artifacts
-            cp -r dist/* build/* artifacts/ || echo "No dist or build folder found."
-          else
-            echo "No APK or build artifact detected."
-            exit 1
-          fi
-
-      - name: Upload Artifact to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: app-artifact
