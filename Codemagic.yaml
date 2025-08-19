@@ -5,13 +5,16 @@ workflows:
     environment:
       node: latest
     scripts:
-      - name: Build Android com EAS
+      - name: Instalar dependências ignorando conflitos
         script: |
           npm install -g eas-cli
+          npm install --legacy-peer-deps
+      - name: Build Android com EAS
+        script: |
           npx eas-cli build --platform android --non-interactive
     artifacts:
       - '**/*.apk'
     publishing:
       email:
         recipients:
-          - victoralefefrnandes@gmail.com
+          - victoralefefernandes@gmail.com
