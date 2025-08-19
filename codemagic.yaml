@@ -1,0 +1,15 @@
+workflows:
+  expo-android:
+    name: Expo Android Build
+    max_build_duration: 60
+    environment:
+      node: latest
+    scripts:
+      - name: Instalar dependências
+        script: |
+          npm install
+      - name: Build Android com EAS
+        script: |
+          npx eas-cli build --platform android --non-interactive
+    artifacts:
+      - build/**/*.apk
