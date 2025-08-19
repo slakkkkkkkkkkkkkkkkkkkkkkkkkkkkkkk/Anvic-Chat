@@ -1,0 +1,13 @@
+workflows:
+  default-workflow:
+    name: Expo Build
+    max_build_duration: 60
+    environment:
+      node: 16
+      expo: latest
+    scripts:
+      - npm install
+      - npx expo prebuild
+      - npx expo build:android -t apk
+    artifacts:
+      - android/app/build/outputs/**/*.apk
