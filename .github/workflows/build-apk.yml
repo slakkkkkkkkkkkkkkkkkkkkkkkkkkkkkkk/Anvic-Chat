@@ -1,0 +1,29 @@
+name: Build Android Debug APK
+on:
+  push:
+    branches:
+      - main  # Altere para o branch do repositório (ex.: master, se necessário)
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'  # Versão compatível com Expo
+      - name: Install dependencies
+        run: npm install
+      - name: Set up Expo CLI
+        run: npm install -g expo-cli
+      - name: Build APK
+        run: expo build:android -t apk --no-publish
+        env:
+          EXPO_USERNAME: ${{ secrets.EXPO_USERNAME }}
+          EXPO_PASSWORD: ${{ secrets.EXPO_PASSWORD }}
+      - name: Upload APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-debug
+          path: '*.apk'
