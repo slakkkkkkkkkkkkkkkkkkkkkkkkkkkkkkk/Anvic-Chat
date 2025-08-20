@@ -1,16 +1,14 @@
 workflows:
-  build-android-debug:
-    name: Build Android Debug
+  anvic-debug:
+    name: Build Anvic Debug APK
     max_build_duration: 60
-    instance_type: mac_mini_m2
     environment:
-      node: 18
-      npm: true
-      groups:
-        - google_play
+      node: latest
+      npm: latest
     scripts:
       - name: Instalar dependências
-        script: npm install
+        script: |
+          npm install --legacy-peer-deps
       - name: Build APK debug
         script: |
           cd android
