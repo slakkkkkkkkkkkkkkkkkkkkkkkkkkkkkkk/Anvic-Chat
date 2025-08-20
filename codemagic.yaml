@@ -1,15 +1,94 @@
 workflows:
-  expo-android:
-    name: Expo Android Build
-    max_build_duration: 60
+  anvic-production:
+    name: Anvic - Build Production APK
+    max_build_duration: 120
+    instance_type: mac_mini_m1
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: 'main'
+          include: true
+          source: true
     environment:
-      node: latest
+      android_signing:
+        - keystore_reference
+      groups:
+        - google_play
+      vars:
+        PACKAGE_NAME: "com.anvic.chat"
+        GOOGLE_PLAY_TRACK: internal
+      node: 18.17.0
+      npm: 9
+      java: 17
+    cache:
+      cache_paths:
+        - $HOME/.npm
+        - $HOME/.yarn
+        - $FCI_BUILD_DIR/node_modules
     scripts:
-      - name: Instalar dependências
+      - name: Install dependencies
         script: |
-          npm install
-      - name: Build Android com EAS
+          npm install --legacy-peer-deps
+      - name: Set up environment
         script: |
-          npx eas-cli build --platform android --non-interactive
+          echo "EXPO_PUBLIC_SUPABASE_URL=$EXPO_PUBLIC_SUPABASE_URL" >> .env
+          echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=$EXPO_PUBLIC_SUPABASE_ANON_KEY" >> .env
+      - name: Prebuild for Android
+        script: |
+          npx expo prebuild --platform android --clear
+      - name: Build Android APK
+        script: |
+          cd android
+          ./gradlew assembleRelease
+      - name: Build Android AAB (Optional)
+        script: |
+          cd android
+          ./gradlew bundleRelease
     artifacts:
-      - build/**/*.apk
+      - android/app/build/outputs/**/*.apk
+      - android/app/build/outputs/**/*.aab
+    publishing:
+      email:
+        recipients:
+          - victor.alefe@example.com
+        notify:
+          success: true
+          failure: true
+
+  anvic-debug:
+    name: Anvic - Build Debug APK
+    max_build_duration: 60
+    instance_type: mac_mini_m1
+    environment:
+      node: 18.17.0
+      npm: 9
+      java: 17
+    cache:
+      cache_paths:
+        - $HOME/.npm
+        - $FCI_BUILD_DIR/node_modules
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm install --legacy-peer-deps
+      - name: Set up environment
+        script: |
+          echo "EXPO_PUBLIC_SUPABASE_URL=$EXPO_PUBLIC_SUPABASE_URL" >> .env
+          echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=$EXPO_PUBLIC_SUPABASE_ANON_KEY" >> .env
+      - name: Prebuild for Android
+        script: |
+          npx expo prebuild --platform android --clear
+      - name: Build Android Debug APK
+        script: |
+          cd android
+          ./gradlew assembleDebug
+    artifacts:
+      - android/app/build/outputs/**/*.apk
+    publishing:
+      email:
+        recipients:
+          - victor.alefe@example.com
+        notify:
+          success: true
+          failure: true
