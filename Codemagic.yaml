@@ -7,8 +7,7 @@ workflows:
       npm: latest
     scripts:
       - name: Instalar dependências
-        script: |
-          npm install --legacy-peer-deps
+        script: npm install --legacy-peer-deps
       - name: Build APK debug
         script: |
           cd android
