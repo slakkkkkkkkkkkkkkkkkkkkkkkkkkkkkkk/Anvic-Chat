@@ -5,10 +5,10 @@ workflows:
     environment:
       node: latest
     scripts:
-      - name: Instalar dependências forçando resolução
+      - name: Instalar dependências
         script: |
           npm install -g eas-cli
-          npm install --force
+          npm install
       - name: Build Android com EAS
         script: |
           npx eas-cli build --platform android --non-interactive
@@ -18,4 +18,3 @@ workflows:
       email:
         recipients:
           - victoralefefernandes@outlook.com
-          
