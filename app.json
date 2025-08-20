@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "main": "App.js",
+    "main": "index.js",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
