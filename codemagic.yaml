@@ -18,6 +18,8 @@ workflows:
       vars:
         PACKAGE_NAME: "com.anvic.chat"
         GOOGLE_PLAY_TRACK: internal
+        EXPO_PUBLIC_SUPABASE_URL: $EXPO_PUBLIC_SUPABASE_URL
+        EXPO_PUBLIC_SUPABASE_ANON_KEY: $EXPO_PUBLIC_SUPABASE_ANON_KEY
       node: 18.17.0
       npm: 9
       java: 17
@@ -34,12 +36,16 @@ workflows:
         script: |
           echo "EXPO_PUBLIC_SUPABASE_URL=$EXPO_PUBLIC_SUPABASE_URL" >> .env
           echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=$EXPO_PUBLIC_SUPABASE_ANON_KEY" >> .env
+      - name: Clear Metro cache
+        script: |
+          npx expo start --clear
       - name: Prebuild for Android
         script: |
           npx expo prebuild --platform android --clear
       - name: Build Android APK
         script: |
           cd android
+          ./gradlew clean
           ./gradlew assembleRelease
       - name: Build Android AAB (Optional)
         script: |
@@ -64,6 +70,9 @@ workflows:
       node: 18.17.0
       npm: 9
       java: 17
+      vars:
+        EXPO_PUBLIC_SUPABASE_URL: $EXPO_PUBLIC_SUPABASE_URL
+        EXPO_PUBLIC_SUPABASE_ANON_KEY: $EXPO_PUBLIC_SUPABASE_ANON_KEY
     cache:
       cache_paths:
         - $HOME/.npm
@@ -76,12 +85,16 @@ workflows:
         script: |
           echo "EXPO_PUBLIC_SUPABASE_URL=$EXPO_PUBLIC_SUPABASE_URL" >> .env
           echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=$EXPO_PUBLIC_SUPABASE_ANON_KEY" >> .env
+      - name: Clear Metro cache
+        script: |
+          npx expo start --clear
       - name: Prebuild for Android
         script: |
           npx expo prebuild --platform android --clear
       - name: Build Android Debug APK
         script: |
           cd android
+          ./gradlew clean
           ./gradlew assembleDebug
     artifacts:
       - android/app/build/outputs/**/*.apk
@@ -92,3 +105,49 @@ workflows:
         notify:
           success: true
           failure: true
+
+  anvic-local-build:
+    name: Anvic - Local Build Script
+    max_build_duration: 30
+    instance_type: mac_mini_m1
+    scripts:
+      - name: Generate build script
+        script: |
+          cat > build-local.sh << 'EOF'
+          #!/bin/bash
+          echo "🚀 Iniciando build do Anvic para Android..."
+          
+          # Verificar se .env existe
+          if [[ ! -f .env ]]; then
+            echo "⚠️  Arquivo .env não encontrado. Criando arquivo padrão..."
+            echo "EXPO_PUBLIC_SUPABASE_URL=your_supabase_url_here" > .env
+            echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here" >> .env
+          fi
+          
+          # Instalar dependências
+          echo "📦 Instalando dependências..."
+          npm install --legacy-peer-deps
+          
+          # Limpar cache
+          echo "🧹 Limpando cache..."
+          npx expo start --clear &
+          sleep 5
+          pkill -f "expo start"
+          
+          # Prebuild
+          echo "⚙️  Executando prebuild..."
+          npx expo prebuild --platform android --clear
+          
+          # Build APK
+          echo "📱 Construindo APK..."
+          cd android
+          ./gradlew clean
+          ./gradlew assembleRelease
+          
+          echo "✅ Build concluído com sucesso!"
+          echo "📱 APK localizado em: android/app/build/outputs/apk/release/"
+          EOF
+          
+          chmod +x build-local.sh
+    artifacts:
+      - build-local.sh
