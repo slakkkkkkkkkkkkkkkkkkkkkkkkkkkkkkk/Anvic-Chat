@@ -3,11 +3,11 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform }
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import Logo from '@/components/ui/Logo';
-import CustomInput from '@/components/ui/CustomInput';
-import CustomButton from '@/components/ui/CustomButton';
-import { Colors } from '@/constants/Colors';
-import { authService } from '@/services/endpoints/auth';
+import Logo from '../../components/ui/Logo';
+import CustomInput from '../../components/ui/CustomInput';
+import CustomButton from '../../components/ui/CustomButton';
+import { Colors } from '../../constants/Colors';
+import { authService } from '../../services/endpoints/auth';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();

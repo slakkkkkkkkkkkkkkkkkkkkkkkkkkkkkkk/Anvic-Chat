@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Logo from '@/components/ui/Logo';
-import CustomInput from '@/components/ui/CustomInput';
-import CustomButton from '@/components/ui/CustomButton';
-import { Colors } from '@/constants/Colors';
-import { useAuth } from '@/hooks/useAuth';
+import Logo from '../../components/ui/Logo';
+import CustomInput from '../../components/ui/CustomInput';
+import CustomButton from '../../components/ui/CustomButton';
+import { Colors } from '../../constants/Colors';
+import { useAuth } from '../../hooks/useAuth';
 
 export default function LoginScreen() {
   const router = useRouter();
