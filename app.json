@@ -133,7 +133,7 @@
           "faceIDPermission": "Anvic usa autenticação biométrica para proteger suas conversas."
         }
       ],
-      [
+            [
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
@@ -142,12 +142,6 @@
           "sounds": [
             "./assets/notification-sound.wav"
           ]
-        }
-      ],
-      [
-        "expo-screen-capture",
-        {
-          "preventScreenCapture": true
         }
       ],
       "expo-secure-store",

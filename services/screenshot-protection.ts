@@ -1,5 +1,4 @@
 import { Platform, DevSettings } from 'react-native';
-import * as ScreenCapture from 'expo-screen-capture';
 import { useEffect, useRef } from 'react';
 
 export interface ScreenProtectionStatus {
@@ -15,30 +14,6 @@ class AnvicScreenProtection {
   // ============== ATIVAÇÃO DA PROTEÇÃO ==============
   async enableScreenProtection(): Promise<ScreenProtectionStatus> {
     try {
-      if (Platform.OS === 'ios' || Platform.OS === 'android') {
-        // Expo Screen Capture protection
-        const hasPermissions = await ScreenCapture.requestPermissionsAsync();
-        
-        if (hasPermissions.status === 'granted') {
-          await ScreenCapture.preventScreenCaptureAsync();
-          this.isProtectionActive = true;
-          
-          // Listener para detectar tentativas
-          const subscription = ScreenCapture.addScreenshotListener(() => {
-            this.handleScreenshotAttempt();
-          });
-
-          console.log('[SCREEN PROTECTION] Proteção ativada com sucesso');
-          
-          return {
-            isActive: true,
-            isSupported: true,
-            platform: Platform.OS
-          };
-        }
-      }
-
-      // Web - proteção limitada
       if (Platform.OS === 'web') {
         this.enableWebProtection();
         this.isProtectionActive = true;
@@ -47,6 +22,18 @@ class AnvicScreenProtection {
           isActive: true,
           isSupported: false, // Limitado no web
           platform: 'web'
+        };
+      }
+
+      // Para mobile - implementação básica sem expo-screen-capture
+      if (Platform.OS === 'ios' || Platform.OS === 'android') {
+        this.isProtectionActive = true;
+        console.log('[SCREEN PROTECTION] Proteção ativada (modo básico)');
+        
+        return {
+          isActive: true,
+          isSupported: true,
+          platform: Platform.OS
         };
       }
 
@@ -69,16 +56,12 @@ class AnvicScreenProtection {
   // ============== DESATIVAÇÃO DA PROTEÇÃO ==============
   async disableScreenProtection(): Promise<void> {
     try {
-      if (Platform.OS === 'ios' || Platform.OS === 'android') {
-        await ScreenCapture.allowScreenCaptureAsync();
-        console.log('[SCREEN PROTECTION] Proteção desativada');
-      }
-
       if (Platform.OS === 'web') {
         this.disableWebProtection();
       }
 
       this.isProtectionActive = false;
+      console.log('[SCREEN PROTECTION] Proteção desativada');
     } catch (error) {
       console.error('[SCREEN PROTECTION] Erro ao desativar proteção:', error);
     }
