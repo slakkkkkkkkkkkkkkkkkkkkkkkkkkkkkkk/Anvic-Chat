@@ -22,7 +22,7 @@ class BiometricService {
     try {
       const compatible = await LocalAuthentication.hasHardwareAsync();
       const enrolled = await LocalAuthentication.isEnrolledAsync();
-      const types = await LocalAuthentechnology.supportedAuthenticationTypesAsync();
+      const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
 
       let type = 'none';
       if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) {

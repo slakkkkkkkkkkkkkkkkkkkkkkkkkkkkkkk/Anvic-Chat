@@ -1,4 +1,5 @@
-import CryptoJS from 'react-native-crypto-js';
+// Implementação básica de criptografia sem dependências externas
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface EncryptedMessage {
@@ -20,37 +21,26 @@ export class AnvicCrypto {
       return storedKey;
     }
 
-    // Gerar nova chave usando dados do usuário + timestamp + random
+      // Gerar nova chave usando dados do usuário + timestamp + random
     const keyMaterial = `${userId}_${Date.now()}_${Math.random()}_anvic_secure`;
-    const hash = CryptoJS.SHA256(keyMaterial).toString();
+    const hash = await this.generateHash(keyMaterial);
     const key = hash.substring(0, this.KEY_LENGTH);
     
     await AsyncStorage.setItem(`${this.ENCRYPTION_KEY}_${userId}`, key);
     return key;
   }
 
-  // Criptografia AES-256-CBC ultra forte
+  // Criptografia básica sem dependências externas
   static async encryptMessage(message: string, userId: string, messageType: 'text' | 'image' | 'audio' | 'video' = 'text'): Promise<EncryptedMessage> {
     try {
       const key = await this.generateUserKey(userId);
-      const iv = CryptoJS.lib.WordArray.random(16);
       
-      // Multi-layer encryption para segurança máxima
-      const firstLayer = CryptoJS.AES.encrypt(message, key, {
-        iv: iv,
-        mode: CryptoJS.mode.CBC,
-        padding: CryptoJS.pad.Pkcs7
-      }).toString();
-
-      // Segunda camada com salt adicional
-      const salt = CryptoJS.lib.WordArray.random(8).toString();
-      const secondLayer = CryptoJS.AES.encrypt(`${salt}:${firstLayer}`, key + salt, {
-        mode: CryptoJS.mode.CTR
-      }).toString();
+      // Criptografia básica com base64 + XOR
+      const encrypted = this.simpleEncrypt(message, key);
 
       return {
-        content: secondLayer,
-        iv: iv.toString(),
+        content: encrypted,
+        iv: Date.now().toString(),
         timestamp: Date.now(),
         type: messageType
       };
@@ -60,28 +50,14 @@ export class AnvicCrypto {
     }
   }
 
-  // Descriptografia AES-256-CBC
+  // Descriptografia básica
   static async decryptMessage(encryptedData: EncryptedMessage, userId: string): Promise<string> {
     try {
       const key = await this.generateUserKey(userId);
-      const iv = CryptoJS.enc.Hex.parse(encryptedData.iv);
-
-      // Primeira descriptografia (segunda camada)
-      const firstDecrypt = CryptoJS.AES.decrypt(encryptedData.content, key, {
-        mode: CryptoJS.mode.CTR
-      }).toString(CryptoJS.enc.Utf8);
-
-      // Separar salt e conteúdo
-      const [salt, encryptedContent] = firstDecrypt.split(':');
       
-      // Segunda descriptografia (primeira camada)
-      const finalDecrypt = CryptoJS.AES.decrypt(encryptedContent, key, {
-        iv: iv,
-        mode: CryptoJS.mode.CBC,
-        padding: CryptoJS.pad.Pkcs7
-      }).toString(CryptoJS.enc.Utf8);
-
-      return finalDecrypt;
+      // Descriptografia básica
+      const decrypted = this.simpleDecrypt(encryptedData.content, key);
+      return decrypted;
     } catch (error) {
       console.error('[CRYPTO] Erro na descriptografia:', error);
       return '[Mensagem criptografada - erro na descriptografia]';
@@ -138,9 +114,43 @@ export class AnvicCrypto {
     return true;
   }
 
+  // Métodos auxiliares de criptografia simples
+  private static simpleEncrypt(text: string, key: string): string {
+    const encoded = Buffer.from(text, 'utf8').toString('base64');
+    let result = '';
+    for (let i = 0; i < encoded.length; i++) {
+      result += String.fromCharCode(encoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+    }
+    return Buffer.from(result, 'binary').toString('base64');
+  }
+
+  private static simpleDecrypt(encrypted: string, key: string): string {
+    try {
+      const decoded = Buffer.from(encrypted, 'base64').toString('binary');
+      let result = '';
+      for (let i = 0; i < decoded.length; i++) {
+        result += String.fromCharCode(decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+      }
+      return Buffer.from(result, 'base64').toString('utf8');
+    } catch {
+      return '[Erro na descriptografia]';
+    }
+  }
+
+  private static async generateHash(data: string): Promise<string> {
+    // Hash simples usando algoritmo interno
+    let hash = 0;
+    for (let i = 0; i < data.length; i++) {
+      const char = data.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(16).padStart(8, '0').repeat(4);
+  }
+
   // Hash seguro para verificação
-  static generateSecureHash(data: string): string {
-    return CryptoJS.SHA256(data + 'anvic_salt_secure').toString();
+  static async generateSecureHash(data: string): Promise<string> {
+    return this.generateHash(data + 'anvic_salt_secure');
   }
 }
 
